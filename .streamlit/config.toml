@@ -1,0 +1,13 @@
+[server]
+# Run on port 5000 with HTTPS
+port = 5000
+sslCertFile = "cert.pem"
+sslKeyFile = "key.pem"
+
+# Enable CORS for local development
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+# Automatically open browser on start
+gatherUsageStats = false

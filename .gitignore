@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Vector Database
+chroma_db/
+
+# SSL Certificates (Don't commit private keys!)
+*.pem
+*.key
+*.crt
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Credentials (IMPORTANT - Never commit these!)
+*client_id*
+*client_secret*
+*credentials*
+oidc-jwt.key
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+temp/
