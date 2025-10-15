@@ -373,13 +373,24 @@ class NASALaunchpadAuth:
 
         # Handle OAuth callback
         if 'code' in query_params and 'state' in query_params:
+            # Check if we've already processed this code (prevent double redemption)
+            processed_code = st.session_state.get('processed_auth_code')
             auth_code = query_params['code']
+
+            if processed_code == auth_code:
+                # Code already processed, skip to authentication check
+                st.query_params.clear()
+                st.rerun()
+
             state = query_params['state']
 
             # Validate state (CSRF protection)
             if not self.validate_state(state):
                 st.error("⚠️ Invalid state parameter. Possible CSRF attack detected.")
                 st.stop()
+
+            # Mark this code as being processed
+            st.session_state['processed_auth_code'] = auth_code
 
             # Exchange authorization code for tokens
             token_response = self.exchange_code_for_token(auth_code)
