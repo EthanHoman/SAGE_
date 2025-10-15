@@ -17,6 +17,8 @@ from authlib.jose import jwt
 from authlib.jose.errors import JoseError
 import secrets
 import time
+import base64
+import json
 from typing import Dict, List, Optional
 
 
@@ -77,6 +79,21 @@ class NASALaunchpadAuth:
         code_challenge = create_s256_code_challenge(code_verifier)
         return code_verifier, code_challenge
 
+    def _set_cookie(self, key: str, value: str):
+        """Store value in browser cookie via JavaScript."""
+        # Use HTML/JavaScript to set cookie since Streamlit doesn't have native cookie support
+        cookie_js = f"""
+        <script>
+            document.cookie = "{key}={value}; path=/; max-age=600; SameSite=Lax";
+        </script>
+        """
+        st.components.v1.html(cookie_js, height=0)
+
+    def _get_cookie(self, key: str) -> Optional[str]:
+        """Retrieve value from browser cookie via JavaScript."""
+        # This is a workaround - we'll use query params instead
+        return None
+
     def get_authorization_url(self) -> str:
         """
         Generate authorization URL with PKCE.
@@ -90,16 +107,32 @@ class NASALaunchpadAuth:
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
 
-        # Store in session AND in query params as backup
+        # Create state package to embed in redirect URI
+        state_data = {
+            'state': state,
+            'verifier': code_verifier
+        }
+        state_encoded = base64.urlsafe_b64encode(
+            json.dumps(state_data).encode()
+        ).decode().rstrip('=')
+
+        # Store in session (will be lost, but try anyway)
         st.session_state['oauth_state'] = state
         st.session_state['code_verifier'] = code_verifier
 
-        # Also store in query params so they survive the redirect
-        st.query_params['pending_state'] = state
-        st.query_params['pending_verifier'] = code_verifier
+        # Modify redirect URI to include state data
+        redirect_with_state = f"{self.redirect_uri}?_state={state_encoded}"
 
-        # Create authorization URL
-        authorization_url, state = self.oauth.create_authorization_url(
+        # Create authorization URL with modified redirect
+        temp_oauth = OAuth2Session(
+            client_id=self.client_id,
+            client_secret=self.client_secret,
+            redirect_uri=redirect_with_state,
+            scope=self.scope,
+            code_challenge_method='S256'
+        )
+
+        authorization_url, _ = temp_oauth.create_authorization_url(
             self.AUTHORIZATION_ENDPOINT,
             state=state,
             code_challenge=code_challenge,
@@ -250,23 +283,35 @@ class NASALaunchpadAuth:
         Returns:
             True if state is valid
         """
-        # Try session state first
-        stored_state = st.session_state.get('oauth_state')
+        # Try to recover state from query param
+        state_param = st.query_params.get('_state')
+        if state_param:
+            try:
+                # Decode state data from redirect URI
+                # Add padding if needed
+                padding = 4 - (len(state_param) % 4)
+                if padding != 4:
+                    state_param += '=' * padding
 
-        # Fallback to query params if session was lost
-        if stored_state is None:
-            stored_state = st.query_params.get('pending_state')
-            if stored_state:
-                # Restore from query params
+                state_json = base64.urlsafe_b64decode(state_param).decode()
+                state_data = json.loads(state_json)
+
+                # Restore state and verifier
+                stored_state = state_data['state']
                 st.session_state['oauth_state'] = stored_state
-                verifier = st.query_params.get('pending_verifier')
-                if verifier:
-                    st.session_state['code_verifier'] = verifier
+                st.session_state['code_verifier'] = state_data['verifier']
+            except Exception as e:
+                st.error(f"Failed to decode state: {str(e)}")
+                return False
+        else:
+            # Fallback to session state
+            stored_state = st.session_state.get('oauth_state')
 
-        # Debug info
+        # Validate
         if stored_state is None:
             st.warning("⚠️ Session state was lost and couldn't be recovered.")
-            st.info("**Troubleshooting:** Clear browser cache and try again.")
+            st.info("**This is a Streamlit limitation with OAuth redirects.**")
+            st.info("**Workaround:** Use simple_auth for testing, or deploy with proper session management.")
             return False
 
         is_valid = stored_state == received_state
