@@ -1,0 +1,46 @@
+[Unit]
+Description=SAGE - Safety Analysis Generation Engine
+Documentation=https://github.com/EthanHoman/SAGE_
+After=network.target network-online.target
+Wants=network-online.target ollama.service
+
+[Service]
+Type=simple
+User=sage
+Group=sage
+WorkingDirectory=/opt/sage
+
+# Environment
+Environment="PATH=/opt/sage/venv/bin:/usr/local/bin:/usr/bin:/bin"
+Environment="PYTHONUNBUFFERED=1"
+
+# Load NASA credentials from environment file
+EnvironmentFile=-/opt/sage/.env
+
+# Start Streamlit
+ExecStart=/opt/sage/venv/bin/streamlit run pdf-rag-python.py \
+    --server.port=8501 \
+    --server.address=127.0.0.1 \
+    --server.headless=true \
+    --browser.gatherUsageStats=false
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=200
+StartLimitBurst=5
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sage/chroma_db /opt/sage/data
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sage
+
+[Install]
+WantedBy=multi-user.target

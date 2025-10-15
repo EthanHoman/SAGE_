@@ -1,0 +1,34 @@
+[Unit]
+Description=Ollama LLM Service
+Documentation=https://ollama.ai
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ollama
+Group=ollama
+WorkingDirectory=/opt/ollama
+
+# Environment
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+Environment="OLLAMA_MODELS=/opt/ollama/models"
+
+# Start Ollama
+ExecStart=/usr/local/bin/ollama serve
+
+# Restart policy
+Restart=always
+RestartSec=10
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ollama
+
+[Install]
+WantedBy=multi-user.target
