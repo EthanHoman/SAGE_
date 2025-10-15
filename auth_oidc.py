@@ -90,9 +90,13 @@ class NASALaunchpadAuth:
         # Generate state for CSRF protection
         state = secrets.token_urlsafe(32)
 
-        # Store in session
+        # Store in session AND in query params as backup
         st.session_state['oauth_state'] = state
         st.session_state['code_verifier'] = code_verifier
+
+        # Also store in query params so they survive the redirect
+        st.query_params['pending_state'] = state
+        st.query_params['pending_verifier'] = code_verifier
 
         # Create authorization URL
         authorization_url, state = self.oauth.create_authorization_url(
@@ -246,8 +250,30 @@ class NASALaunchpadAuth:
         Returns:
             True if state is valid
         """
+        # Try session state first
         stored_state = st.session_state.get('oauth_state')
-        return stored_state is not None and stored_state == received_state
+
+        # Fallback to query params if session was lost
+        if stored_state is None:
+            stored_state = st.query_params.get('pending_state')
+            if stored_state:
+                # Restore from query params
+                st.session_state['oauth_state'] = stored_state
+                verifier = st.query_params.get('pending_verifier')
+                if verifier:
+                    st.session_state['code_verifier'] = verifier
+
+        # Debug info
+        if stored_state is None:
+            st.warning("⚠️ Session state was lost and couldn't be recovered.")
+            st.info("**Troubleshooting:** Clear browser cache and try again.")
+            return False
+
+        is_valid = stored_state == received_state
+        if not is_valid:
+            st.error(f"State mismatch - stored: {stored_state[:10]}... received: {received_state[:10]}...")
+
+        return is_valid
 
     def is_authenticated(self) -> bool:
         """
